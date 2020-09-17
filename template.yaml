@@ -187,6 +187,82 @@ Resources:
           Properties:
             Queue: !GetAtt Queue.Arn
             BatchSize: 1
+  Graphql:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
+        - ResourceName: Graphql
+      AuthenticationType: API_KEY
+      LogConfig:
+        FieldLogLevel: ERROR
+        CloudWatchLogsRoleArn: !GetAtt GraphqlLogsRole.Arn
+      XrayEnabled: true
+  GraphqlSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt Graphql.ApiId
+      DefinitionS3Location: Graphql/schema.graphql
+  GraphqlLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: appsync.amazonaws.com
+          Action: sts:AssumeRole
+      RoleName: !Sub ${AWS::StackName}-Graphql-logs
+      Policies:
+        - PolicyName: Log
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/appsync/apis/*
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/appsync/apis/*:log-stream:*
+  GraphqlQuerygetTodosResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      TypeName: Query
+      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
+      RequestMappingTemplateS3Location: Graphql/Query-getTodos-request.vm
+      ResponseMappingTemplateS3Location: Graphql/Query-getTodos-response.vm
+      ApiId: !GetAtt Graphql.ApiId
+      FieldName: getTodos
+    DependsOn: GraphqlSchema
+  GraphqlLocalDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      Type: NONE
+      ApiId: !GetAtt Graphql.ApiId
+      Name: Local
+  GraphqlTodoidResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      TypeName: Todo
+      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
+      RequestMappingTemplateS3Location: Graphql/Todo-id-request.vm
+      ResponseMappingTemplateS3Location: Graphql/Todo-id-response.vm
+      ApiId: !GetAtt Graphql.ApiId
+      FieldName: id
+    DependsOn: GraphqlSchema
+  GraphqlMutationaddTodoResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      TypeName: Mutation
+      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
+      RequestMappingTemplateS3Location: Graphql/Mutation-addTodo-request.vm
+      ResponseMappingTemplateS3Location: Graphql/Mutation-addTodo-response.vm
+      ApiId: !GetAtt Graphql.ApiId
+      FieldName: addTodo
+    DependsOn: GraphqlSchema
 Parameters:
   StackTagName:
     Type: String
