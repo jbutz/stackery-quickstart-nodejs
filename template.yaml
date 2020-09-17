@@ -99,7 +99,7 @@ Resources:
                 type: aws_proxy
                 uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${newItem.Arn}/invocations
               responses: {}
-          /item{id}:
+          /item/{id}:
             delete:
               x-amazon-apigateway-integration:
                 httpMethod: POST
@@ -155,17 +155,17 @@ Resources:
         - AWSXrayWriteOnlyAccess
         - SNSPublishMessagePolicy:
             TopicName: !GetAtt Topic.TopicName
-      Events:
-        QuickstartApiDELETEitemid:
-          Type: Api
-          Properties:
-            Path: /item{id}
-            Method: DELETE
-            RestApiId: !Ref QuickstartApi
       Environment:
         Variables:
           TOPIC_NAME: !GetAtt Topic.TopicName
           TOPIC_ARN: !Ref Topic
+      Events:
+        QuickstartApiDELETEitemid:
+          Type: Api
+          Properties:
+            Path: /item/{id}
+            Method: DELETE
+            RestApiId: !Ref QuickstartApi
   queueFunction:
     Type: AWS::Serverless::Function
     Properties:
