@@ -18,14 +18,10 @@ Resources:
         - AWSXrayWriteOnlyAccess
         - DynamoDBCrudPolicy:
             TableName: !Ref Items
-        - SNSPublishMessagePolicy:
-            TopicName: !GetAtt Topic.TopicName
       Environment:
         Variables:
           TABLE_NAME: !Ref Items
           TABLE_ARN: !GetAtt Items.Arn
-          TOPIC_NAME: !GetAtt Topic.TopicName
-          TOPIC_ARN: !Ref Topic
       Events:
         QuickstartApiPOSTnewItem:
           Type: Api
@@ -111,33 +107,6 @@ Resources:
       Cors:
         AllowHeaders: '''Authorization,Content-Type'''
         AllowOrigin: '''*'''
-  Queue:
-    Type: AWS::SQS::Queue
-    Properties:
-      KmsMasterKeyId: alias/aws/sqs
-  Topic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub ${AWS::StackName}-Topic
-      Subscription:
-        - Endpoint: !GetAtt Queue.Arn
-          Protocol: sqs
-  TopicToQueuePermission:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: sns.amazonaws.com
-            Action: sqs:SendMessage
-            Resource: !GetAtt Queue.Arn
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Ref Topic
-      Queues:
-        - !Ref Queue
   deleteItem:
     Type: AWS::Serverless::Function
     Properties:
@@ -154,11 +123,7 @@ Resources:
       Policies:
         - AWSXrayWriteOnlyAccess
         - SNSPublishMessagePolicy:
-            TopicName: !GetAtt Topic.TopicName
-      Environment:
-        Variables:
-          TOPIC_NAME: !GetAtt Topic.TopicName
-          TOPIC_ARN: !Ref Topic
+            TopicName: !GetAtt MySNSTopic.TopicName
       Events:
         QuickstartApiDELETEitemid:
           Type: Api
@@ -166,103 +131,10 @@ Resources:
             Path: /item/{id}
             Method: DELETE
             RestApiId: !Ref QuickstartApi
-  queueFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${AWS::StackName}-queueFunction
-      Description: !Sub
-        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
-        - ResourceName: queueFunction
-      CodeUri: src/queueFunction
-      Handler: index.handler
-      Runtime: nodejs12.x
-      MemorySize: 3008
-      Timeout: 30
-      Tracing: Active
-      Policies:
-        - AWSXrayWriteOnlyAccess
-      Events:
-        Queue:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt Queue.Arn
-            BatchSize: 1
-  Graphql:
-    Type: AWS::AppSync::GraphQLApi
-    Properties:
-      Name: !Sub
-        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
-        - ResourceName: Graphql
-      AuthenticationType: API_KEY
-      LogConfig:
-        FieldLogLevel: ERROR
-        CloudWatchLogsRoleArn: !GetAtt GraphqlLogsRole.Arn
-      XrayEnabled: true
-  GraphqlSchema:
-    Type: AWS::AppSync::GraphQLSchema
-    Properties:
-      ApiId: !GetAtt Graphql.ApiId
-      DefinitionS3Location: Graphql/schema.graphql
-  GraphqlLogsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          Effect: Allow
-          Principal:
-            Service: appsync.amazonaws.com
-          Action: sts:AssumeRole
-      RoleName: !Sub ${AWS::StackName}-Graphql-logs
-      Policies:
-        - PolicyName: Log
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/appsync/apis/*
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/appsync/apis/*:log-stream:*
-  GraphqlQuerygetTodosResolver:
-    Type: AWS::AppSync::Resolver
-    Properties:
-      TypeName: Query
-      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
-      RequestMappingTemplateS3Location: Graphql/Query-getTodos-request.vm
-      ResponseMappingTemplateS3Location: Graphql/Query-getTodos-response.vm
-      ApiId: !GetAtt Graphql.ApiId
-      FieldName: getTodos
-    DependsOn: GraphqlSchema
-  GraphqlLocalDataSource:
-    Type: AWS::AppSync::DataSource
-    Properties:
-      Type: NONE
-      ApiId: !GetAtt Graphql.ApiId
-      Name: Local
-  GraphqlTodoidResolver:
-    Type: AWS::AppSync::Resolver
-    Properties:
-      TypeName: Todo
-      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
-      RequestMappingTemplateS3Location: Graphql/Todo-id-request.vm
-      ResponseMappingTemplateS3Location: Graphql/Todo-id-response.vm
-      ApiId: !GetAtt Graphql.ApiId
-      FieldName: id
-    DependsOn: GraphqlSchema
-  GraphqlMutationaddTodoResolver:
-    Type: AWS::AppSync::Resolver
-    Properties:
-      TypeName: Mutation
-      DataSourceName: !GetAtt GraphqlLocalDataSource.Name
-      RequestMappingTemplateS3Location: Graphql/Mutation-addTodo-request.vm
-      ResponseMappingTemplateS3Location: Graphql/Mutation-addTodo-response.vm
-      ApiId: !GetAtt Graphql.ApiId
-      FieldName: addTodo
-    DependsOn: GraphqlSchema
+      Environment:
+        Variables:
+          TOPIC_NAME: !GetAtt MySNSTopic.TopicName
+          TOPIC_ARN: !Ref MySNSTopic
 Parameters:
   StackTagName:
     Type: String
